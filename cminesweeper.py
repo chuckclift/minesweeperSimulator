@@ -12,17 +12,9 @@ def curses_solve(stdscr):
 
     while not my_board.game_over:
         time.sleep(0.1)
-        previous_clicked = len(my_board.clicked)
-        previous_flagged = len(my_board.flagged)
  
         minesweeper.decide(my_board)
 
-        same_clicked = len(my_board.clicked) == previous_clicked
-        same_flagged = len(my_board.flagged) == previous_flagged
-    
-        # if nothing has changed, guess
-        if same_clicked and same_flagged:
-            minesweeper.guess(my_board)
         stdscr.clear()
 
 
