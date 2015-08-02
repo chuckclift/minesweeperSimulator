@@ -3,6 +3,7 @@
 import random
 import time
 from itertools import permutations
+from itertools import product 
  
 class Game_board(object):
     def __init__(self, dimensions, MINE_COUNT):
@@ -131,7 +132,7 @@ class Game_board(object):
         self._y_dim = value
 
 class Text_generated_board(Game_board):
-    def __init__(self, text):
+    def __init__(self, board_rows):
         """
             a board is generated using input text rather than 
             dimensions and mine counts.  Each row is contained
@@ -143,7 +144,7 @@ class Text_generated_board(Game_board):
             s = unclicked tile
         """
         rows = [] 
-        for r in text:
+        for r in board_rows:
             values_in_row = [a in r for a in "#*s012345678"]
             if any(values_in_row) and not " " in r:
                 rows.append(r.strip())    
@@ -186,73 +187,11 @@ class Text_generated_board(Game_board):
 
         self.game_over = False
 
-class Tile_theory(object):
-    def __init__(self, unclicked, clicked_count, flagged_count, mine_count):
-        uncounted_mines = mine_count - flagged_count
-        mines = [1] * uncounted_mines
-
-        empty_spaces = len(unclicked) - uncounted_mines 
-        empty = [0] * empty_spaces 
-
-        combinations = set([a for a in permutations(mines + empty) 
-                       if len(a) == len(unclicked)])
-
-        # assigning each possible permutation of mine values (1 or 0) to the
-        # tile locations each row is a possible situation
-        self._possible_permutations = [{s: m for s,m in zip(unclicked, p)}
-                                         for p in combinations]
-    def print_permutations(self):
-        for i in self._possible_permutations:
-            print(" ".join([str(a)  for a in i.items()]))
-
-    def check_permutations (self, reference_permutations):
-        new_permutations = []
-        for a in self._possible_permutations:
-
-#            agreement = [permutation_agree(a, ref) 
-#                        for ref in reference_permutations]
-            agreement = permutation_agree(a, reference_permutations)
-            if agreement:
-                new_permutations.append(a)
-        self._possible_permutations = new_permutations
-        
-
-    @property
-    def possible_permutations(self):
-        return self._possible_permutations
- 
-    @possible_permutations.setter
-    def possible_permutations(self, value):
-        self._possible_permutations = value
-
-def permutation_agree(test_permutation, reference_permutation):
-    """
-        takes in two dictionaries with the coordinates (as tuples)
-        as the keys and with the mine values as the value (0 or 1).
-        If they disagree on at least one value, this function
-        returns a false
-    """
-    permutation_set = set(test_permutation)
-    reference_set = set(reference_permutation)
-
-    intersection = permutation_set.intersection(reference_set)
-    overlap = len(intersection) != 0
-    
-    # if none of the dictionary keys match, the permutations can not disagree,
-    # so the intersection of the two sets is checked.  If there is no overlap,
-    # then the permutations agree (so true is returned).
-    if not overlap:
-        return True
-
-    conflict_free = all([test_permutation[a] == reference_permutation[a] 
-                    for a in intersection])
-
-    if conflict_free:
-        return True
-    else:
-        return False
 
 
+#######################################################
+###  Utility Functions              ###################
+#######################################################
 def get_adjacent_tiles(point_location, group_locations):
     """
          returns a set of points that are adjacent to the 
@@ -281,7 +220,65 @@ def count_adjacent_group(point_location, group_locations):
     """
     adjacent_tiles = get_adjacent_tiles(point_location, group_locations)
     return len(adjacent_tiles)
-       
+
+def theory_valid(theory, chunk,  board):
+    """
+        tests a single theory based on whether each clicked
+        tile has the required number of adjacent mines.
+    """
+    for i in chunk:
+        adjacent_theory_values = [theory[a] for a in
+                                 get_adjacent_tiles(i, theory)]
+        
+        theoretical_sum = (sum(adjacent_theory_values) +
+                          count_adjacent_group(i, board.flagged))
+        agree = theoretical_sum == board.tile_values[i]
+        if not agree:
+            return False
+    return True
+
+def chunk_surfaces(board):
+    surfaces = []
+    current_surface = set()
+    unchunked_tiles = {a for a in board.clicked 
+                      if count_adjacent_group(a, board.unclicked) > 0}
+    for _ in range(0, len(unchunked_tiles)):
+        new_start_point = unchunked_tiles.pop()
+        new_surface = get_surface(new_start_point,  unchunked_tiles)
+        surfaces.append(new_surface) 
+        unchunked_tiles = unchunked_tiles - new_surface
+
+        if len(unchunked_tiles) == 0:
+            return surfaces
+    return surfaces 
+        
+def get_surface(start_tile, unchunked_tiles):
+    """
+        Given a start tile and unchunked tiles, it 
+    """
+    chunked_surface = {start_tile}
+    previous_surface = set()
+
+    while len(chunked_surface) > len(previous_surface):
+        previous_surface = chunked_surface.copy()
+
+        new_edge = set()
+
+        # getting the tiles at the "edge" of the chunk
+        for i in chunked_surface:
+            adjacent_tiles = set(get_adjacent_tiles(i, unchunked_tiles))
+            new_tiles = adjacent_tiles.difference(chunked_surface)
+            new_edge.update(new_tiles)
+
+        chunked_surface.update(new_edge)
+
+    return chunked_surface
+    
+
+
+#################################################
+##     Solution functions                ########
+#################################################
 def decide(board):
     if len(board.clicked) == 0:
         random_pick = random.choice(list(board.unclicked))
@@ -311,51 +308,85 @@ def decide(board):
                     for a in unclicked_tiles:
                         board.flag_tile(a)
                     return 
-    probability_guess(board) 
+    theory_guess(board) 
     # if none of that works, just guess               
 
-def probability_guess(board):
-    # getting rid of complete tiles since there are no adjacent
-    # tiles next to them
-    choices = [a for a in board.clicked
-              if count_adjacent_group(a, board.unclicked) != 0]
-    
-    theories = []
-    for a in choices:
-        unclicked = get_adjacent_tiles(a, board.unclicked)
-        clicked_count = count_adjacent_group(a, board.clicked)
-        flagged_count = count_adjacent_group(a, board.flagged)
-        mine_count = board.tile_values[a]
-        theories.append(Tile_theory(unclicked, clicked_count, 
-                        flagged_count, mine_count))
-    for i in theories:
-        i.print_permutations()
 
-    for a in theories:
-        for b in theories:
-            for c in b.possible_permutations: 
-                a.check_permutations(c)
-        
-        if len(a.possible_permutations) == 1:
-            for d in a.possible_permutations[0]:
-                if a.possible_permutations[0][d] == 1:
-                    board.flag_tile(d)
+def theory_guess(board):
+    """
+        Decides the best move by building theories about small groups
+        of tiles, and making moves based on those theories.
+    """
+    board_surfaces = chunk_surfaces(board)
+    for i in board_surfaces:
+        unclicked_tiles = board.unclicked
+
+        # getting the corresponding unclicked surface
+        adjacent_unclicked = [get_adjacent_tiles(a, unclicked_tiles) for a in i] 
+        adjacent_unclicked = {a for b in adjacent_unclicked for a in b}
+        if len(adjacent_unclicked) > 17:
+            guess(board)
+            return  
+
+        # build theories of where mines are
+        possibilities = product([0,1], repeat=len(adjacent_unclicked)) 
+        theories = [{k:v for k,v in zip(adjacent_unclicked, p)} 
+                     for p in possibilities]
+
+        # test corresponding theories and keep the good ones
+        good_theories = [a for a in theories if theory_valid(a, i,  board)]
+
+
+        if len(good_theories) == 1:
+        # if there is only one good theory, click all of the mine-free
+        # tiles and flag all of the mined tiles
+            for i in good_theories[0]:
+                if good_theories[0][i] == 1:
+                    board.flag_tile(i)
                 else:
-                    board.click_tile(d)
-            return
+                    board.click_tile(i)
+        else:
+        # otherwise, calculate the probabilities the spaces
+        # being mined based on those theories
+            tile_probabilities = dict()
+            for tile in adjacent_unclicked:
+                mines = 0
+                tiles = 0
+                for theory in good_theories:
+                    if tile in theory:
+                        tiles += 1
+                        mines += theory[tile]
 
-    for i in theories:
-        i.print_permutations()
 
+                # if a space has a mine in all theories, flag it 
+                if mines / tiles == 1:
+                    board.flag_tile(tile)
+                    return
+                # If a space is mine-free in all theories, click it
+                elif mines == 0:
+                    board.click_tile(tile)
+                    return
+                    
+                tile_probabilities[tile] = mines / tiles        
 
+            # educated guessing
+            average_probability = len(board.unclicked) / board.get_mine_count()
+            
+            probabilities = {tile_probabilities[a]:a for a in tile_probabilities}
+           
+            lowest = min(probabilities)
+            if lowest < average_probability:
+                best_tile = probabilities[lowest]                 
+                board.click_tile(best_tile)
+            else:
+                guess(board)
 
-    guess(board) 
 
 def guess(board):
     if len(board.unclicked) > 0:
         random_pick = random.choice(list(board.unclicked))
         board.click_tile(random_pick)
-     
+    
 def solve(board):
     mine_number = board.get_mine_count()
     while not board.game_over:
@@ -377,17 +408,16 @@ def solve(board):
  
 if __name__ == "__main__":
     # running 2 simulations
-    for i in range(0, 1): 
+    for i in range(0, 10): 
         
-        BOARD_DIMENSIONS = (16, 16)
-        MINE_NUMBER = 4
-        board_rows = ['ssssssssss',
-                      'ss*sss*sss',
-                      'ssssssss*s',
-                      'ss*sssssss']  
-        board_rows = ['*s*','121']
-        print(board_rows)
-        my_board = Text_generated_board(board_rows)
+        BOARD_DIMENSIONS = (30, 16)
+        MINE_NUMBER = 99
+#        board_rows = ['ssssssssss',
+#                      'ss*sss*sss',
+#                      'ssssssss*s',
+#                      'ss*sssssss']  
+#        board_rows = ['*s*','121']
+#        my_board = Text_generated_board(board_rows)
         my_board = Game_board(BOARD_DIMENSIONS, MINE_NUMBER)
         
         solve(my_board)
