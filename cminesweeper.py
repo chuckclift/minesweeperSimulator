@@ -18,9 +18,9 @@ def curses_solve(stdscr):
         stdscr.clear()
 
 
-        stdscr.addstr(0 , 1, "* " * ( BOARD_DIMENSIONS[0] + 2))
+        stdscr.addstr(0 , 1, "--" * ( BOARD_DIMENSIONS[0] + 2))
         for i in range(0, BOARD_DIMENSIONS[1]):
-            row = "* "
+            row = "| "
             for j in range(0, BOARD_DIMENSIONS[0]):
                 if (j, i) in my_board.clicked:
                     row += str(my_board.tile_values[(j, i)]) + " "
@@ -29,13 +29,15 @@ def curses_solve(stdscr):
                 else:
                     row += "  "
              
-            stdscr.addstr(i + 1, 1, row + "*")
-        stdscr.addstr(BOARD_DIMENSIONS[1] + 1, 1, "* " * (BOARD_DIMENSIONS[0] + 2))
+            stdscr.addstr(i + 1, 1, row + "|")
+        stdscr.addstr(BOARD_DIMENSIONS[1] + 1, 1, "--" * (BOARD_DIMENSIONS[0] + 2))
         
+        stdscr.addstr(10, 2 * BOARD_DIMENSIONS[0] + 5, "clicked: " + str(len(my_board.clicked)))
         stdscr.refresh()
          
 def main(stdscr_curses):
     for i in range(0, 100):
         curses_solve(stdscr_curses)         
+        time.sleep(2)
 
 wrapper(main)

@@ -2,7 +2,6 @@
  
 import random
 import time
-from itertools import permutations
 from itertools import product 
  
 class Game_board(object):
@@ -41,25 +40,41 @@ class Game_board(object):
         for i in range(0, self._y_dim):
             row = ""
             for j in range(0, self._x_dim):
-               if (j, i) in self._clicked:
-                   row +=  str(self._tile_values[(j, i)])
-               elif (j, i) in self._flagged:
-                   row += "#"
-               else:
-                   row += " "
+                if (j, i) in self._mined and (j,i) in self._clicked:
+                    row += "*"
+                elif (j, i) in self._clicked: 
+                    row +=  str(self._tile_values[(j, i)])
+                elif (j, i) in self._flagged:
+                    row += "#"
+                else:
+                    row += " "
             print(row)
         print("###############################")
         print("You have flagged " + str(len(self._flagged)))
+
+
+    def print_mines_numbers(self):
+        print("##########Mines and Numbers#########")
+        for i in range(0, self._y_dim):
+            row = "@"
+            for j in range(0, self._x_dim):
+                if (j, i) in self._mined:
+                    row += "*"
+                else:
+                    row +=  str(self._tile_values[(j, i)])
+            row += "@"
+            print(row)
+        print("###############################")
  
     def click_tile(self, location):
         if location in self._mined:
+            self._clicked.add(location)
             print("Game Over")
             self.game_over = True
             return True
         else:
             self._clicked.add(location) 
             self._unclicked.discard(location)
-            print(len(self._clicked))
             return False
  
     def flag_tile(self, location):
@@ -167,6 +182,7 @@ class Text_generated_board(Game_board):
                     self._unclicked.append((column_count, row_count))
                 elif c == '#':
                     self._flagged.append((column_count,row_count))
+                    self._mined.append((column_count, row_count))
                 elif c == 's':
                     self._unclicked.append((column_count,row_count))
                 else:
@@ -192,6 +208,7 @@ class Text_generated_board(Game_board):
 #######################################################
 ###  Utility Functions              ###################
 #######################################################
+
 def get_adjacent_tiles(point_location, group_locations):
     """
          returns a set of points that are adjacent to the 
@@ -242,19 +259,21 @@ def chunk_surfaces(board):
     current_surface = set()
     unchunked_tiles = {a for a in board.clicked 
                       if count_adjacent_group(a, board.unclicked) > 0}
-    for _ in range(0, len(unchunked_tiles)):
+
+    while len(unchunked_tiles) > 0:
         new_start_point = unchunked_tiles.pop()
         new_surface = get_surface(new_start_point,  unchunked_tiles)
-        surfaces.append(new_surface) 
+        if len(new_surface) < 10:
+            surfaces.append(new_surface) 
         unchunked_tiles = unchunked_tiles - new_surface
 
-        if len(unchunked_tiles) == 0:
-            return surfaces
     return surfaces 
+
         
 def get_surface(start_tile, unchunked_tiles):
     """
-        Given a start tile and unchunked tiles, it 
+        Given a start tile and unchunked tiles, it builds a chain of adjacent
+        tiles and returns them
     """
     chunked_surface = {start_tile}
     previous_surface = set()
@@ -273,60 +292,14 @@ def get_surface(start_tile, unchunked_tiles):
         chunked_surface.update(new_edge)
 
     return chunked_surface
-    
 
-
-#################################################
-##     Solution functions                ########
-#################################################
-def decide(board):
-    if len(board.clicked) == 0:
-        random_pick = random.choice(list(board.unclicked))
-        board.click_tile(random_pick)
-    else:
-        for i in board.clicked:
-            adjacent_unclicked = count_adjacent_group(i, board.unclicked) 
-            cell_complete = adjacent_unclicked == 0
-
-            if not cell_complete:
-                adjacent_mines = board.tile_values[i]
-                unclicked_tiles =  get_adjacent_tiles(i, board.unclicked)
-
-                if adjacent_mines == 0:
-                    for a in unclicked_tiles:
-                        board.click_tile(a)
-                adjacent_flagged = count_adjacent_group(i, board.flagged)
-                adjacent_clicked = count_adjacent_group(i, board.clicked) 
-                
-                mines_found = adjacent_mines == adjacent_flagged 
-            
-                if mines_found:
-                    for a in unclicked_tiles:
-                        board.click_tile(a)
-                    return 
-                elif adjacent_flagged + adjacent_unclicked == adjacent_mines :
-                    for a in unclicked_tiles:
-                        board.flag_tile(a)
-                    return 
-    theory_guess(board) 
-    # if none of that works, just guess               
-
-
-def theory_guess(board):
-    """
-        Decides the best move by building theories about small groups
-        of tiles, and making moves based on those theories.
-    """
-    board_surfaces = chunk_surfaces(board)
-    for i in board_surfaces:
+def find_good_theories(chunk, board):
         unclicked_tiles = board.unclicked
-
+        
         # getting the corresponding unclicked surface
-        adjacent_unclicked = [get_adjacent_tiles(a, unclicked_tiles) for a in i] 
+        adjacent_unclicked = [get_adjacent_tiles(a, unclicked_tiles)
+                             for a in chunk] 
         adjacent_unclicked = {a for b in adjacent_unclicked for a in b}
-        if len(adjacent_unclicked) > 17:
-            guess(board)
-            return  
 
         # build theories of where mines are
         possibilities = product([0,1], repeat=len(adjacent_unclicked)) 
@@ -334,58 +307,156 @@ def theory_guess(board):
                      for p in possibilities]
 
         # test corresponding theories and keep the good ones
-        good_theories = [a for a in theories if theory_valid(a, i,  board)]
+        good_theories = [a for a in theories if theory_valid(a, chunk,  board)]
+        return good_theories
 
 
-        if len(good_theories) == 1:
+def adjacent_chunks(chunk, board):
+    adjacent_unclicked = [get_adjacent_tiles(a, board.unclicked)
+                         for a in chunk] 
+    return {a for b in adjacent_unclicked for a in b}
+
+def split_big_chunk(chunk, max_size=10, min_size=1):   
+    for split_point in chunk:
+        test_chunk = chunk.copy()
+        test_chunk.discard(split_point)
+        start_points = get_adjacent_tiles(split_point, test_chunk) 
+        print("Start points: ",len(start_points)) 
+        if len(start_points) == 2:
+            surface_1 = get_surface(start_points.pop(), test_chunk)
+            surface_2 = get_surface(start_points.pop(), test_chunk)
+           
+            first_good = min_size < len(surface_1) and len(surface_1) < max_size
+            second_good = min_size < len(surface_2) and len(surface_2) < max_size
+
+            if first_good and second_good:
+                return [surface_1, surface_2]
+
+
+
+   
+
+#################################################
+##     Solution functions                ########
+#################################################
+def decide(board):
+    
+    if len(board.clicked) == 0:
+        guess(board)
+
+    for i in board.clicked:
+        adjacent_unclicked = count_adjacent_group(i, board.unclicked) 
+        cell_complete = adjacent_unclicked == 0
+
+        if not cell_complete:
+            adjacent_mines = board.tile_values[i]
+            unclicked_tiles =  get_adjacent_tiles(i, board.unclicked)
+
+            if adjacent_mines == 0:
+                print("zero adjacent mines")
+                for a in unclicked_tiles:
+                    board.click_tile(a)
+                return
+
+            adjacent_flagged = count_adjacent_group(i, board.flagged)
+            adjacent_clicked = count_adjacent_group(i, board.clicked) 
+            
+            mines_found = adjacent_mines == adjacent_flagged 
+        
+            # if all adjacent mines are found, then the rest of the spaces
+            # must be safe        
+            if mines_found:
+                print("clicking since mines found")
+                for a in unclicked_tiles:
+                    board.click_tile(a)
+                return 
+            elif adjacent_flagged + adjacent_unclicked == adjacent_mines :
+                print("flagging since it's possible")
+                for a in unclicked_tiles:
+                    board.flag_tile(a)
+                return 
+
+    theory_guess(board) 
+ 
+def theory_guess(board):
+    """
+        Decides the best move by building theories about small groups
+        of tiles, and making moves based on those theories.
+    """
+    print("Theory guess")
+    clicked_chunks = chunk_surfaces(board)
+    if len(clicked_chunks) == 0:
+        guess(board)
+        return
+
+    for i in clicked_chunks.copy():
+        if len(adjacent_chunks(i, board)) > 16:
+            clicked_chunks.remove(i)
+            clicked_chunks.extend(split_big_chunk(i))
+
+    good_theories = [find_good_theories(chunk, board) for chunk in clicked_chunks]
+
+    for theory_list in good_theories:
+        if len(theory_list) == 1:
         # if there is only one good theory, click all of the mine-free
         # tiles and flag all of the mined tiles
-            for i in good_theories[0]:
-                if good_theories[0][i] == 1:
-                    board.flag_tile(i)
+            for t in theory_list[0]:
+                print(good_theories)
+                if theory_list[0][t] == 1:
+                    board.flag_tile(t)
                 else:
-                    board.click_tile(i)
-        else:
-        # otherwise, calculate the probabilities the spaces
+                    board.click_tile(t)
+            return
+
+    tile_probabilities = dict()
+
+    for chunk, theory_list in zip(clicked_chunks, good_theories):
+       # otherwise, calculate the probabilities the spaces
         # being mined based on those theories
-            tile_probabilities = dict()
-            for tile in adjacent_unclicked:
-                mines = 0
-                tiles = 0
-                for theory in good_theories:
-                    if tile in theory:
-                        tiles += 1
-                        mines += theory[tile]
+        adjacent_unclicked = adjacent_chunks(chunk, board)
+        for tile in adjacent_unclicked:
+            mines = 0
+            tiles = 0
+            for theory in theory_list:
+                if tile in theory:
+                    tiles += 1
+                    mines += theory[tile]
+
+            # if a space has a mine in all theories, flag it 
+            if mines / tiles == 1:
+                board.flag_tile(tile)
+                return
+            # If a space is mine-free in all theories, click it
+            elif mines == 0:
+                board.click_tile(tile)
+                return
+
+            tile_probabilities[tile] = mines / tiles        
+
+    probability_guess(board, tile_probabilities) 
 
 
-                # if a space has a mine in all theories, flag it 
-                if mines / tiles == 1:
-                    board.flag_tile(tile)
-                    return
-                # If a space is mine-free in all theories, click it
-                elif mines == 0:
-                    board.click_tile(tile)
-                    return
-                    
-                tile_probabilities[tile] = mines / tiles        
+def probability_guess(board, tile_probabilities):
+    print("Probability guess")
+    if len(tile_probabilities) == 0:
+        guess(board)
+        return
 
-            # educated guessing
-            average_probability = len(board.unclicked) / board.get_mine_count()
-            
-            probabilities = {tile_probabilities[a]:a for a in tile_probabilities}
-           
-            lowest = min(probabilities)
-            if lowest < average_probability:
-                best_tile = probabilities[lowest]                 
-                board.click_tile(best_tile)
-            else:
-                guess(board)
+    average_probability = board.get_mine_count() / len(board.unclicked)  
+    probabilities = {tile_probabilities[a]:a for a in tile_probabilities}
+       
+    lowest = min(probabilities)
+    if lowest < average_probability:
+        best_tile = probabilities[lowest]                 
+        board.click_tile(best_tile)
+        return
 
+    guess(board)
 
 def guess(board):
-    if len(board.unclicked) > 0:
-        random_pick = random.choice(list(board.unclicked))
-        board.click_tile(random_pick)
+    print("Blind guess")
+    random_pick = random.choice(list(board.unclicked))
+    board.click_tile(random_pick)
     
 def solve(board):
     mine_number = board.get_mine_count()
@@ -395,6 +466,7 @@ def solve(board):
  
         decide(board)
         board.print_clicked_tiles()
+#        board.print_mines_numbers()
         print("Length of clicked: " + str(len(board.clicked)))
  
  
@@ -404,11 +476,19 @@ def solve(board):
     else:
         print("Better luck next time")
         print("you only had %i mines left" % (mine_number - len(board.flagged)))
+        print("There were ", str(mine_number), "mines total")
 
  
 if __name__ == "__main__":
-    # running 2 simulations
+    # running 10 simulations
     for i in range(0, 10): 
+        print("### ###")
+        print("###>###")
+        print("### ###")
+        print("    ###>")
+        print("### ###")    
+        print("###>###")
+        print("### ###")
         
         BOARD_DIMENSIONS = (30, 16)
         MINE_NUMBER = 99
@@ -417,9 +497,10 @@ if __name__ == "__main__":
 #                      'ssssssss*s',
 #                      'ss*sssssss']  
 #        board_rows = ['*s*','121']
+#        board_rows = ['2#', '*2','s2','*3','##']
 #        my_board = Text_generated_board(board_rows)
         my_board = Game_board(BOARD_DIMENSIONS, MINE_NUMBER)
         
         solve(my_board)
-     
+        time.sleep(2)
  
