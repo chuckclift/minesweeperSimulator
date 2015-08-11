@@ -6,6 +6,8 @@ from itertools import product
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 import progressMap
+from statistics import mean
+import optparse
  
 class Game_board(object):
     def __init__(self, dimensions, MINE_COUNT):
@@ -28,7 +30,14 @@ class Game_board(object):
         self._clicked = set()
         self._unclicked = set(self._tile_coordinates[:])
         self.game_over = False
-        
+
+        for co, val in self._tile_values.items():
+            if val == 0:
+                for a in get_adjacent_tiles(co, self._unclicked):
+                    self._clicked.add(a) 
+                    self._unclicked.discard(a)
+                break
+                    
     def print_board_numbers(self):
         print("##########Board Numbers###########")
         for i in range(0, self._y_dim):
@@ -72,19 +81,25 @@ class Game_board(object):
     def click_tile(self, location):
         if location in self._mined:
             self._clicked.add(location)
-#            print("Game Over")
             self.game_over = True
             return True
         else:
             self._clicked.add(location) 
             self._unclicked.discard(location)
+
+            win = len(self._unclicked) == 0
+            if win:
+                self.game_over = True
             return False
  
     def flag_tile(self, location):
         self._flagged.add(location)
         self._unclicked.discard(location) 
  
-        win = all([a in self._flagged for a in self._mined])
+#        flags_complete  = all([a in self._flagged for a in self._mined])
+
+        win = len(self._unclicked) == 0
+
         if win:
 #            print("you've won")
             self.game_over = True
@@ -319,14 +334,6 @@ def find_good_theories(chunk, board):
             
 
     return good_theories
-"""
-    theories = [{k:v for k,v in zip(adjacent_unclicked, p)} 
-                 for p in possibilities]
-    # test corresponding theories and keep the good ones
-    good_theories = [a for a in theories if theory_valid(a, chunk,  board)]
-"""
-
-
 
 
 def adjacent_chunk(chunk, board):
@@ -334,7 +341,7 @@ def adjacent_chunk(chunk, board):
                          for a in chunk] 
     return {a for b in adjacent_unclicked for a in b}
 
-def split_big_chunk(chunk, max_difference=0.4):   
+def split_big_chunk(chunk, max_difference=0.3):   
     """
         Breaks a set of coordinates into two smaller sets of coordinates
     """
@@ -421,20 +428,10 @@ def decide(board):
                 for a in unclicked_tiles:
                     board.flag_tile(a)
                 return 
-
-    guess(board)
-# this strategy takes long and doesn't improve accuracy that much
-# moving on to pattern match (sort of like 2d regex)
     generate_theories(board) 
 
-def pattern_match(board):
-    print("Hello world")
 
-#            # = flagged mine
-#            1,2,...,8 = clicked tile
-#            s = unclicked tile
-#            c = clicked 
- 
+
 def generate_theories(board):
     """
         Decides the best move by building theories about small groups
@@ -535,8 +532,8 @@ def probability_guess(board, tile_probabilities):
         best_tile = probabilities[lowest]                 
         board.click_tile(best_tile)
         return
-
-    guess(board)
+    else:
+        guess(board)
 
 def guess(board):
     random_pick = random.choice(list(board.unclicked))
@@ -579,25 +576,67 @@ def scale_solve(board):
     board = len(board.tile_values)
     percent = int(100 * (clicked + flagged) / board)
     return percent 
- 
-if __name__ == "__main__":
+
+def main():
+    parser = optparse.OptionParser()
+    parser.add_option("-m", action="store", default="p",
+                      help="""Method of simulation p for processes,
+                            v for visual, s for silent, and b for
+                            progress bar""")
+    parser.add_option("-s", action="store", type="int", default=100,
+                      help="The number of simulations")
+    parser.add_option("-p", action="store", type="int", default=8,
+                      help="""the number of processes (if process option
+                           is chosen)""")
+    options, args = parser.parse_args()
+
     BOARD_DIMENSIONS = (30, 16)
     MINE_NUMBER = 99
     progress_scores = [] 
-    boards = [Game_board(BOARD_DIMENSIONS, MINE_NUMBER) for i in range(200)]
+    SIMULATIONS =   options.s 
+    boards = [Game_board(BOARD_DIMENSIONS, MINE_NUMBER) for i in range(SIMULATIONS)]
 
     probabilities = []
-#    probabilities = [visual_solve(b) for b in boards]
+    start = time.time()
+    if options.m == "p":
+        solvers = Pool(options.p)
+        probabilities = solvers.map(scale_solve, boards)
+    elif options.m == "v":
+        probabilities = [visual_solve(b) for b in boards]
+    elif options.m == "s":
+        probabilities = [scale_solve(b) for b in boards]
+    elif options.m == "b":
+        probabilities = progressMap.status_bar(scale_solve, boards)
+    elapsed = time.time() - start
 
-
-    solvers = Pool(40)
-    probabilities = solvers.map(scale_solve, boards)
-
-#    probabilities = progressMap.status_bar(scale_solve, boards)
     probabilities.sort()
-    print("\n".join([str(a) for a in probabilities]))
-    plt.hist(probabilities)
-    plt.xlabel('Percent Complete')
-    plt.ylabel('frequency')
-    plt.show() 
-    
+
+    graph_values = []
+    for i in range(20):
+        low = i * 5
+        high = i*5 + 5
+        total = sum([1 for a in probabilities if a >= low and a < high])
+        percent = (100 *   total /  SIMULATIONS) 
+        bar = (percent - percent % 5) / 5
+        label = str(high) + " " * ( 3-len(str(high))) +  ": " 
+        print(label + "#" * int(bar) + str(int(percent)) + "%")
+
+    print("Average: ", mean(probabilities))
+    print("over 95%: ",sum([1 for a in probabilities if a > 95]))
+    print("won: ", sum([1 for a in probabilities if a == 100])) 
+    print("Elapsed time:", round(elapsed, 2))
+    if options.m == "p":
+        print("Processes:", options.p)
+
+#    plt.hist(probabilities)
+#    plt.xlabel('Percent Complete')
+#    plt.ylabel('frequency')
+#    plt.show() 
+#    time.sleep(5)
+#    plt.close()    
+
+
+
+ 
+if __name__ == "__main__":
+    main()
