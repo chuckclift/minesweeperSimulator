@@ -1,9 +1,8 @@
-#!/usr/bin/python3.4
+#!/usr/bin/env python3
  
 import random
 import time
 from itertools import product 
-import matplotlib.pyplot as plt
 from multiprocessing import Pool
 import progressMap
 from statistics import mean
@@ -95,13 +94,9 @@ class Game_board(object):
     def flag_tile(self, location):
         self._flagged.add(location)
         self._unclicked.discard(location) 
- 
-#        flags_complete  = all([a in self._flagged for a in self._mined])
-
         win = len(self._unclicked) == 0
 
         if win:
-#            print("you've won")
             self.game_over = True
     def get_mine_count(self):
         return len(self._mined)
@@ -175,6 +170,11 @@ class Text_generated_board(Game_board):
             # = flagged mine
             1,2,...,8 = clicked tile
             s = unclicked tile
+        
+            example: 
+            rows = ["121","*s*"]
+            board = Text_generated_board(rows)
+            solve(board)
         """
         rows = [] 
         for r in board_rows:
@@ -262,8 +262,7 @@ def theory_valid(theory, chunk,  board):
         tile has the required number of adjacent mines.
     """
     for i in chunk:
-        adjacent_theory_values = [theory[a] for a in
-                                 get_adjacent_tiles(i, theory)]
+        adjacent_theory_values = [theory[a] for a in get_adjacent_tiles(i, theory)]
         
         theoretical_sum = (sum(adjacent_theory_values) +
                           count_adjacent_group(i, board.flagged))
@@ -277,6 +276,7 @@ def chunk_surfaces(board):
     current_surface = set()
     unchunked_tiles = {a for a in board.clicked 
                       if count_adjacent_group(a, board.unclicked) > 0}
+   
 
     while len(unchunked_tiles) > 0:
         new_start_point = unchunked_tiles.pop()
@@ -389,7 +389,16 @@ def split_big_chunk(chunk, max_difference=0.3):
                     surface_2.add(split_1)
                     surface_2.add(split_2)
                     return [surface_1, surface_2]
-             
+
+def adjust_value(tile, board):
+    return board.tile_values[tile] - count_adjacent_group(tile, board.flagged)
+
+def finished(tile, board):
+    return count_adjacent_group(tile, board.unclicked) == 0
+
+def small_chunk(tile, board):
+    return {a for a in get_adjacent_tiles(tile, board.clicked) if not finished(a,board)}
+           
         
      
 #################################################
@@ -398,7 +407,7 @@ def split_big_chunk(chunk, max_difference=0.3):
 def decide(board):
     
     if len(board.clicked) == 0:
-        guess(board)
+        return False
 
     for i in board.clicked:
         adjacent_unclicked = count_adjacent_group(i, board.unclicked) 
@@ -411,7 +420,7 @@ def decide(board):
             if adjacent_mines == 0:
                 for a in unclicked_tiles:
                     board.click_tile(a)
-                return
+                return True
 
             adjacent_flagged = count_adjacent_group(i, board.flagged)
             adjacent_clicked = count_adjacent_group(i, board.clicked) 
@@ -423,25 +432,72 @@ def decide(board):
             if mines_found:
                 for a in unclicked_tiles:
                     board.click_tile(a)
-                return 
+                return True
             elif adjacent_flagged + adjacent_unclicked == adjacent_mines:
                 for a in unclicked_tiles:
                     board.flag_tile(a)
-                return 
-    generate_theories(board) 
+                return True
+
+    return False
 
 
+def is_121(tile, board):
+    # is the adjusted value 2?
+    if not adjust_value(tile, board) == 2:
+        return False
 
+    # does it have 3 adjacent unclicked?
+    if not count_adjacent_group(tile, board.unclicked) == 3:
+        return False 
+
+    # does it have 2 adjacent adjusted 1's?
+    adjacent = {a: adjust_value(a, board) for a in get_adjacent_tiles(tile, board.clicked)}
+    adjacent = {a:b for a,b in adjacent.items() if b == 1}
+ 
+    if not len(adjacent) == 2:
+        return False
+
+    x,y = tile
+    if (x+1,y) in adjacent and (x-1, y) in adjacent:
+        return True
+    elif (x, y+1) in adjacent and (x, y-1) in adjacent:
+        return True
+    else: 
+        return False
+
+def find_121(board):
+    """
+        Checks for a 121 pattern in the board
+    """
+    if len(board.clicked) == 0:
+        return False
+  
+     
+    one_two_ones = [a for a in board.clicked if is_121(a, board)]
+#    return any([is_121(a, board) for a in board.clicked.copy()])
+
+    if len(one_two_ones) == 0:
+        return False
+
+    new_chunks = [small_chunk(a,board)  for a in one_two_ones]
+
+    good_theories = [find_good_theories(chunk, board) for chunk in new_chunks]
+
+    if check_for_one_theory(board, good_theories, new_chunks):
+        return True
+    elif check_single_tile(board, good_theories, new_chunks):
+        return True
+    else:
+        return False
+        
 def generate_theories(board):
     """
         Decides the best move by building theories about small groups
         of tiles, and making moves based on those theories.
     """
-#    print("Theory guess")
     clicked_chunks = chunk_surfaces(board)
     if len(clicked_chunks) == 0:
-        guess(board)
-        return
+        return False
     
     too_big_chunks = [len(adjacent_chunk(i, board)) > 16 for i in clicked_chunks]
 
@@ -464,11 +520,15 @@ def generate_theories(board):
 
             clicked_chunks = new_chunks.copy()
                     
-
+     
     good_theories = [find_good_theories(chunk, board) for chunk in clicked_chunks]
 
-    if not check_for_one_theory(board, good_theories, clicked_chunks):
-        check_single(board, good_theories, clicked_chunks) 
+    if check_for_one_theory(board, good_theories, clicked_chunks):
+        return True
+    elif check_single_tile(board, good_theories, clicked_chunks):
+        return True
+    else:
+        return False
 
 def check_for_one_theory(board, theories, clicked_chunks):
     """
@@ -490,7 +550,7 @@ def check_for_one_theory(board, theories, clicked_chunks):
     return False 
 
 
-def check_single(board, theories, clicked_chunks):
+def check_single_tile(board, theories, clicked_chunks):
     tile_probabilities = dict()
 
     for chunk, theory_list in zip(clicked_chunks, theories):
@@ -522,7 +582,7 @@ def check_single(board, theories, clicked_chunks):
 def probability_guess(board, tile_probabilities):
     if len(tile_probabilities) == 0:
         guess(board)
-        return
+        return False
 
     average_probability = board.get_mine_count() / len(board.unclicked)  
     probabilities = {tile_probabilities[a]:a for a in tile_probabilities}
@@ -531,9 +591,9 @@ def probability_guess(board, tile_probabilities):
     if lowest < average_probability:
         best_tile = probabilities[lowest]                 
         board.click_tile(best_tile)
-        return
+        return True
     else:
-        guess(board)
+        return False
 
 def guess(board):
     random_pick = random.choice(list(board.unclicked))
@@ -545,7 +605,13 @@ def visual_solve(board):
         time.sleep(0.1)
         previous_unclicked = len(board.unclicked)
  
-        decide(board)
+        if decide(board):
+            pass
+        elif find_121(board):
+            print("Found 121")
+            pass
+        else:
+            guess(board)
         board.print_clicked_tiles()
         print("Length of clicked: " + str(len(board.clicked)))
  
@@ -565,11 +631,16 @@ def visual_solve(board):
  
 
 
-def scale_solve(board):
+def silent_solve(board):
     mine_number = board.get_mine_count()
     while not board.game_over:
         previous_unclicked = len(board.unclicked)
-        decide(board)
+        if decide(board):
+            pass
+        elif find_121(board):
+            pass
+        else:
+            guess(board)
 
     clicked = len(board.clicked)
     flagged = len(board.flagged)
@@ -598,15 +669,16 @@ def main():
 
     probabilities = []
     start = time.time()
+    # choosing how the solution will be performed and choosing output method
     if options.m == "p":
         solvers = Pool(options.p)
-        probabilities = solvers.map(scale_solve, boards)
+        probabilities = solvers.map(silent_solve, boards)
     elif options.m == "v":
         probabilities = [visual_solve(b) for b in boards]
     elif options.m == "s":
-        probabilities = [scale_solve(b) for b in boards]
+        probabilities = [silent_solve(b) for b in boards]
     elif options.m == "b":
-        probabilities = progressMap.status_bar(scale_solve, boards)
+        probabilities = progressMap.status_bar(silent_solve, boards)
     elapsed = time.time() - start
 
     probabilities.sort()
@@ -616,27 +688,17 @@ def main():
         low = i * 5
         high = i*5 + 5
         total = sum([1 for a in probabilities if a >= low and a < high])
-        percent = (100 *   total /  SIMULATIONS) 
-        bar = (percent - percent % 5) / 5
-        label = str(high) + " " * ( 3-len(str(high))) +  ": " 
-        print(label + "#" * int(bar) + str(int(percent)) + "%")
+        percent = int(100 *   total /  SIMULATIONS) 
+        label = str(low) + "-" + str(high) + ":"
+        print(label, percent, "%")
 
-    print("Average: ", mean(probabilities))
+    print("Average: ", round(mean(probabilities), 2))
     print("over 95%: ",sum([1 for a in probabilities if a > 95]))
     print("won: ", sum([1 for a in probabilities if a == 100])) 
+    print("Simulations:",  options.s) 
     print("Elapsed time:", round(elapsed, 2))
     if options.m == "p":
         print("Processes:", options.p)
 
-#    plt.hist(probabilities)
-#    plt.xlabel('Percent Complete')
-#    plt.ylabel('frequency')
-#    plt.show() 
-#    time.sleep(5)
-#    plt.close()    
-
-
-
- 
 if __name__ == "__main__":
     main()
