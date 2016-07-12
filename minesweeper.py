@@ -7,7 +7,10 @@ from multiprocessing import Pool
 import progressMap
 from statistics import mean
 import optparse
- 
+from collections import namedtuple
+
+Tile = namedtuple("Tile", ["coord", "adj_mine_count", "adj_flagged",
+                           "adj_clicked", "adj_unclicked"])
 class Game_board(object):
     def __init__(self, dimensions, MINE_COUNT):
         self._x_dim, self._y_dim = dimensions 
@@ -226,6 +229,10 @@ class Text_generated_board(Game_board):
 #######################################################
 ###  Utility Functions              ###################
 #######################################################
+def create_tile(tile, board):
+    return Tile(tile, board.tile_values[tile], get_adjacent_tiles(tile, board.flagged),
+                get_adjacent_tiles(tile, board.clicked), get_adjacent_tiles(tile, board.unclicked))
+
 
 def get_adjacent_tiles(point_location, group_locations):
     """
@@ -405,41 +412,35 @@ def small_chunk(tile, board):
 ##     Solution functions                ########
 #################################################
 def decide(board):
-    
-    if len(board.clicked) == 0:
-        return False
+    tiles = (create_tile(c, board) for c in board.clicked)
 
-    for i in board.clicked:
-        adjacent_unclicked = count_adjacent_group(i, board.unclicked) 
-        cell_complete = adjacent_unclicked == 0
+    unfinished_tiles = [c for c in tiles if len(c.adj_unclicked) > 0]
 
-        if not cell_complete:
-            adjacent_mines = board.tile_values[i]
-            unclicked_tiles =  get_adjacent_tiles(i, board.unclicked)
+    zero_adj_mine_tiles = [c.adj_unclicked for c in unfinished_tiles if c.adj_mine_count == 0]
+    all_mines_found_tiles = [c.adj_unclicked for c in unfinished_tiles
+                             if c.adj_mine_count == len(c.adj_flagged)]
+    only_flags_left_tiles = [c.adj_unclicked for c in unfinished_tiles
+                             if len(c.adj_unclicked) == c.adj_mine_count - len(c.adj_flagged)]
 
-            if adjacent_mines == 0:
-                for a in unclicked_tiles:
-                    board.click_tile(a)
-                return True
+    for a in zero_adj_mine_tiles:
+        [board.click_tile(b) for b in a]
 
-            adjacent_flagged = count_adjacent_group(i, board.flagged)
-            adjacent_clicked = count_adjacent_group(i, board.clicked) 
-            
-            mines_found = adjacent_mines == adjacent_flagged 
-        
-            # if all adjacent mines are found, then the rest of the spaces
-            # must be safe        
-            if mines_found:
-                for a in unclicked_tiles:
-                    board.click_tile(a)
-                return True
-            elif adjacent_flagged + adjacent_unclicked == adjacent_mines:
-                for a in unclicked_tiles:
-                    board.flag_tile(a)
-                return True
+    for a in all_mines_found_tiles:
+        [board.click_tile(b) for b in a]
 
-    return False
+    for a in only_flags_left_tiles:
+        [board.flag_tile(b) for b in a]
 
+    if zero_adj_mine_tiles:
+        pass
+    if all_mines_found_tiles:
+        pass
+    if only_flags_left_tiles:
+        pass
+    elif find_121(board):
+        pass
+    else:
+        guess(board)
 
 def is_121(tile, board):
     # is the adjusted value 2?
@@ -601,46 +602,36 @@ def guess(board):
     
 def visual_solve(board):
     mine_number = board.get_mine_count()
+
     while not board.game_over:
         time.sleep(0.1)
-        previous_unclicked = len(board.unclicked)
- 
-        if decide(board):
-            pass
-        elif find_121(board):
-            print("Found 121")
-            pass
-        else:
-            guess(board)
+        decide(board)
         board.print_clicked_tiles()
         print("Length of clicked: " + str(len(board.clicked)))
- 
+
+
  
     if len(board.flagged) == mine_number:
         print("You've won, congratulations")
     else:
         print("Better luck next time")
-        print("you only had %i mines left" % (mine_number - len(board.flagged)))
+        print("you had %i mines left" % (mine_number - len(board.flagged)))
         print("There were ", str(mine_number), "mines total")
 
     clicked = len(board.clicked)
     flagged = len(board.flagged)
     board = len(board.tile_values)
     percent = int(100 * (clicked + flagged) / board)
+
+
+    time.sleep(10)
     return percent 
  
 
 
 def silent_solve(board):
-    mine_number = board.get_mine_count()
     while not board.game_over:
-        previous_unclicked = len(board.unclicked)
-        if decide(board):
-            pass
-        elif find_121(board):
-            pass
-        else:
-            guess(board)
+        decide(board)
 
     clicked = len(board.clicked)
     flagged = len(board.flagged)
