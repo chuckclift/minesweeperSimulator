@@ -1,4 +1,4 @@
-#!/usr/bin/python3.4
+#!/usr/bin/env python3
 
 import unittest
 
@@ -6,6 +6,10 @@ import minesweeper
 from minesweeper import get_adjacent_tiles
 from minesweeper import count_adjacent_group
 from collections import namedtuple
+
+from solvers import *
+from game import *
+
 
 class my_test (unittest.TestCase):
     def test_get_adjacent_tiles(self):
@@ -25,8 +29,9 @@ class my_test (unittest.TestCase):
         Tile = namedtuple("Tile", ["coord", "adj_mine_count", "adj_flagged",
                                "adj_clicked", "adj_unclicked"])
         t = Tile((1,1), 1, {}, {(0,1), (1,0), (2,0), (0,2), (2,1), (1,2), (2,2)}, {(0,0)})
-
         self.assertEqual(len(t.adj_unclicked), t.adj_mine_count - len(t.adj_flagged))
+
+        t = Tile((1,1), 1, {}, {(0,1), (1,0), (2,0), (0,2), (2,1), (1,2), (2,2)}, {(0,0)})
 
         
 if __name__ == "__main__": 

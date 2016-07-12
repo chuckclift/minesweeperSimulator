@@ -2,18 +2,20 @@
 
 from curses import wrapper
 import time
-import minesweeper
+# import minesweeper
+from solvers import *
+from game import *
 
 def curses_solve(stdscr):
     BOARD_DIMENSIONS = (16, 30)
     MINE_NUMBER = 99
-    my_board = minesweeper.Game_board(BOARD_DIMENSIONS, MINE_NUMBER)
+    my_board = Game_board(BOARD_DIMENSIONS, MINE_NUMBER)
 
 
     while not my_board.game_over:
         time.sleep(0.1)
  
-        minesweeper.decide(my_board)
+        decide(my_board)
 
         stdscr.clear()
 
