@@ -19,7 +19,7 @@ class Game_board(object):
          
         # making a list of all of the coordinates 
         self._tile_coordinates = [(a, b) for a in range(0, self._x_dim)
-                             for b in range(0, self._y_dim)]
+                                         for b in range(0, self._y_dim)]
  
         random.shuffle(self._tile_coordinates)
  
@@ -35,13 +35,17 @@ class Game_board(object):
         self._unclicked = set(self._tile_coordinates[:])
         self.game_over = False
 
-        for co, val in self._tile_values.items():
-            if val == 0:
-                for a in get_adjacent_tiles(co, self._unclicked):
-                    self._clicked.add(a) 
-                    self._unclicked.discard(a)
-                break
-                    
+        zero_tiles = [coord for coord, val in self._tile_values.items() if val == 0]
+        
+        first_tile = random.choice(zero_tiles)
+        self._clicked.add(first_tile)
+        self._unclicked.discard(first_tile)
+        
+        adj_tiles = set(get_adjacent_tiles(first_tile, self._unclicked))
+       
+        self._clicked.update(adj_tiles) 
+        self._unclicked.difference_update(adj_tiles)
+
     def print_board_numbers(self):
         print("##########Board Numbers###########")
         for i in range(0, self._y_dim):
