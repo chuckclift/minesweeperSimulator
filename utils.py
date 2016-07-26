@@ -45,7 +45,7 @@ def theory_valid(theory, chunk,  board):
         
         theoretical_sum = (sum(adjacent_theory_values) +
                           count_adjacent_group(i, board.flagged))
-        agree = theoretical_sum == board.tile_values[i]
+        agree = theoretical_sum == board.clicked[i]
         if not agree:
             return False
     return True
@@ -170,7 +170,7 @@ def split_big_chunk(chunk, max_difference=0.3):
                     return [surface_1, surface_2]
 
 def adjust_value(tile, board):
-    return board.tile_values[tile] - count_adjacent_group(tile, board.flagged)
+    return board._clicked[tile] - count_adjacent_group(tile, board.flagged)
 
 def finished(tile, board):
     return count_adjacent_group(tile, board.unclicked) == 0

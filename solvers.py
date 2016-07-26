@@ -214,7 +214,7 @@ def visual_solve(board):
 
     clicked = len(board.clicked)
     flagged = len(board.flagged)
-    board = len(board.tile_values)
+    board = len(board.clicked) + len(board.unclicked)
     percent = int(100 * (clicked + flagged) / board)
 
 
@@ -227,7 +227,7 @@ def silent_solve(board):
 
     clicked = len(board.clicked)
     flagged = len(board.flagged)
-    board = len(board.tile_values)
+    board = len(board.clicked) + len(board.unclicked)
     percent = int(100 * (clicked + flagged) / board)
     return percent 
 

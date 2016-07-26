@@ -7,53 +7,24 @@ from utils import *
 Tile = namedtuple("Tile", ["coord", "adj_mine_count", "adj_flagged",
                            "adj_clicked", "adj_unclicked"])
 def create_tile(tile, board):
-    value = board.tile_values[tile]
+    value = board._clicked[tile]
     adj_flagged = get_adjacent_tiles(tile, board.flagged)
     adj_clicked = get_adjacent_tiles(tile, board.clicked)
     adj_unclicked = get_adjacent_tiles(tile, board.unclicked)
     return Tile(tile, value, adj_flagged, adj_clicked, adj_unclicked)
 
 class Game_board(object):
-    def __init__(self, dimensions, MINE_COUNT):
+    def __init__(self, dimensions, MINE_COUNT, first_click):
         self._x_dim, self._y_dim = dimensions 
          
-        # making a list of all of the coordinates 
-        self._tile_coordinates = [(a, b) for a in range(0, self._x_dim)
-                                         for b in range(0, self._y_dim)]
- 
-        random.shuffle(self._tile_coordinates)
- 
-        self._mined = self._tile_coordinates[:MINE_COUNT]
-        self.number_board = [count_adjacent_group(a, self._mined) 
-                          for a in self._tile_coordinates]
- 
-        self._tile_values  = {key: value for (key, value)
-                          in zip(self._tile_coordinates, self.number_board)} 
- 
+        self._unclicked  = {(a, b) for a in range(0, self._x_dim)
+                                   for b in range(0, self._y_dim)} - {first_click}
+
+        self._mined = random.sample(self._unclicked, MINE_COUNT)
+
         self._flagged = set()
-        self._clicked = set()
-        self._unclicked = set(self._tile_coordinates[:])
+        self._clicked = {first_click: count_adjacent_group(first_click, self._mined)}
         self.game_over = False
-
-        zero_tiles = [coord for coord, val in self._tile_values.items() if val == 0]
-        
-        first_tile = random.choice(zero_tiles)
-        self._clicked.add(first_tile)
-        self._unclicked.discard(first_tile)
-        
-        adj_tiles = set(get_adjacent_tiles(first_tile, self._unclicked))
-       
-        self._clicked.update(adj_tiles) 
-        self._unclicked.difference_update(adj_tiles)
-
-    def print_board_numbers(self):
-        print("##########Board Numbers###########")
-        for i in range(0, self._y_dim):
-            print("row numbers " + str(self._y_dim))
-            print("column numbers " + str(self._x_dim))
-            row_values = [self._tile_values[j, i]
-                         for j in range(0, self._x_dim)]
-            print(" ".join(str(a) for a in row_values ))
  
     def print_clicked_tiles(self):
         print("##########Clicked Tiles#########")
@@ -63,7 +34,7 @@ class Game_board(object):
                 if (j, i) in self._mined and (j,i) in self._clicked:
                     row += "*"
                 elif (j, i) in self._clicked: 
-                    row +=  str(self._tile_values[(j, i)])
+                    row +=  str(self._clicked[(j, i)])
                 elif (j, i) in self._flagged:
                     row += "#"
                 else:
@@ -72,27 +43,13 @@ class Game_board(object):
         print("###############################")
         print("You have flagged " + str(len(self._flagged)))
 
-
-    def print_mines_numbers(self):
-        print("##########Mines and Numbers#########")
-        for i in range(0, self._y_dim):
-            row = "@"
-            for j in range(0, self._x_dim):
-                if (j, i) in self._mined:
-                    row += "*"
-                else:
-                    row +=  str(self._tile_values[(j, i)])
-            row += "@"
-            print(row)
-        print("###############################")
- 
     def click_tile(self, location):
         if location in self._mined:
-            self._clicked.add(location)
+            self._clicked[location] = "*"
             self.game_over = True
             return True
         else:
-            self._clicked.add(location) 
+            self._clicked[location] = count_adjacent_group(location, self._mined)     # .add(location, ) 
             self._unclicked.discard(location)
 
             win = len(self._unclicked) == 0
@@ -137,22 +94,6 @@ class Game_board(object):
         self._clicked = value
  
     @property
-    def tile_values(self):
-        return self._tile_values
- 
-    @tile_values.setter
-    def tile_values(self, value):
-        self._tile_values = value
- 
-    @property
-    def tile_coordinates(self):
-        return self._tile_coordinates
- 
-    @tile_coordinates.setter
-    def tile_coordinates(self, value):
-        self._tile_coordinates = value
- 
-    @property
     def x_dim(self):
         return self._x_dim
  
@@ -185,49 +126,18 @@ class Text_generated_board(Game_board):
             board = Text_generated_board(rows)
             solve(board)
         """
-        rows = [] 
-        for r in board_rows:
-            values_in_row = [a in r for a in "#*s012345678"]
-            if any(values_in_row) and not " " in r:
-                rows.append(r.strip())    
+        values = {}
+        for y, row in enumerate(board_rows):
+            for x, value in enumerate(row):
+                values[(x, y)] = value
 
-        self._x_dim = len(rows[0])
-        self._y_dim = len(rows)
+        self._clicked = {a:b for a, b in values.items() if b in "012345678"}
+        self._unclicked = {a for a, b in values.items() if b == "s"}
+        self._flagged = {}
+        self._mined = {a for a, b in values.items() if b == "*"}
 
-        self._tile_values = dict() 
-        self._flagged = [] 
-        self._clicked = [] 
-        self._unclicked = [] 
-        self._mined = [] 
-        
-        row_count = 0
-        for r in rows:
-            column_count = 0
-            for c in list(r):
-                if c == '*':
-                    self._mined.append((column_count,row_count))
-                    self._unclicked.append((column_count, row_count))
-                elif c == '#':
-                    self._flagged.append((column_count,row_count))
-                    self._mined.append((column_count, row_count))
-                elif c == 's':
-                    self._unclicked.append((column_count,row_count))
-                else:
-                    self._tile_values[column_count, row_count] = int(c)
-                    self._clicked.append((column_count, row_count))
-                column_count += 1
-            row_count += 1  
-
-        uncounted_spaces = self._mined + self._flagged + self._unclicked
-        for i in uncounted_spaces:
-            adjacent_mines = count_adjacent_group(i, self._mined)
-            self._tile_values[i] = adjacent_mines
-       
-        self._tile_coordinates = list(self._tile_values)
-        self._flagged = set(self._flagged)
-        self._clicked = set(self._clicked)
-        self._unclicked = set(self._unclicked)
+        self._x_dim = len(board_rows[0])
+        self._y_dim = len(board_rows)
 
         self.game_over = False
-
 

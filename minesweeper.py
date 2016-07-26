@@ -27,7 +27,7 @@ def main():
     MINE_NUMBER = 99
     progress_scores = [] 
     SIMULATIONS =   options.s 
-    boards = [Game_board(BOARD_DIMENSIONS, MINE_NUMBER) for i in range(SIMULATIONS)]
+    boards = [Game_board(BOARD_DIMENSIONS, MINE_NUMBER, (8,8)) for i in range(SIMULATIONS)]
 
     probabilities = []
     start = time.time()
