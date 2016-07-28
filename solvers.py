@@ -29,7 +29,7 @@ def decide(board):
     for a in only_flags_left_tiles:
         [board.flag_tile(b) for b in a]
 
-    if zero_adj_mine_tiles  + all_mines_found_tiles + only_flags_left_tiles:
+    if zero_adj_mine_tiles or  all_mines_found_tiles or only_flags_left_tiles:
         pass
     elif find_121(board):
         pass
@@ -38,7 +38,7 @@ def decide(board):
 
 def is_121(tile, board):
     # is the adjusted value 2?
-    if not adjust_value(tile, board) == 2:
+    if not adjust_value(tile, board.clicked[tile],  board.flagged) == 2:
         return False
 
     # does it have 3 adjacent unclicked?
@@ -46,7 +46,8 @@ def is_121(tile, board):
         return False 
 
     # does it have 2 adjacent adjusted 1's?
-    adjacent = {a: adjust_value(a, board) for a in get_adjacent_tiles(tile, board.clicked)}
+    adjacent = {a: adjust_value(a, board.clicked[a],  board.flagged) 
+                        for a in get_adjacent_tiles(tile, board.clicked)}
     adjacent = {a:b for a,b in adjacent.items() if b == 1}
  
     if not len(adjacent) == 2:

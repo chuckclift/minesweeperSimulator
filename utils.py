@@ -169,8 +169,8 @@ def split_big_chunk(chunk, max_difference=0.3):
                     surface_2.add(split_2)
                     return [surface_1, surface_2]
 
-def adjust_value(tile, board):
-    return board._clicked[tile] - count_adjacent_group(tile, board.flagged)
+def adjust_value(tile, face_value, flagged_tiles):
+    return face_value - count_adjacent_group(tile, flagged_tiles)
 
 def finished(tile, board):
     return count_adjacent_group(tile, board.unclicked) == 0
