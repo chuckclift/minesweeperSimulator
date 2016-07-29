@@ -39,8 +39,6 @@ def main():
         probabilities = [visual_solve(b) for b in boards]
     elif options.m == "s":
         probabilities = [silent_solve(b) for b in boards]
-    elif options.m == "b":
-        probabilities = progressMap.status_bar(silent_solve, boards)
     elapsed = time.time() - start
 
     probabilities.sort()
