@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
  
-from itertools import product 
+from itertools import product, permutations
+
+all_combos = set()
+for tile_count in range(3, 9): 
+    for mine_count in range(1, tile_count + 1): 
+        for p in permutations([0]*(tile_count - mine_count) + [1]*mine_count, tile_count):
+            all_combos.add(p)
+
 
 #######################################################
 ###  Utility Functions              ###################
