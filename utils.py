@@ -214,7 +214,7 @@ def empty_and_flagged(theory, flagged):
     return any([theory[t] == 0 and t in flagged for t in theory])
 
 def manage_theories(clicked, unclicked, flagged):
-    all_tiles = set(clicked) + unclicked + flagged 
+    all_tiles = set(clicked).union(unclicked).union(flagged)
     boundary = boundary_clicked(clicked, unclicked)
 
     nested_theories = [restricted_theory(b, boundary[b], all_tiles) 
