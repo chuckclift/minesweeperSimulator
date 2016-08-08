@@ -131,7 +131,7 @@ class Text_generated_board(Game_board):
             for x, value in enumerate(row):
                 values[(x, y)] = value
 
-        self._clicked = {a:b for a, b in values.items() if b in "012345678"}
+        self._clicked = {a:int(b) for a, b in values.items() if b in "012345678"}
         self._unclicked = {a for a, b in values.items() if b == "s"}
         self._flagged = {a for a,b in values.items() if b == "#"}
         self._mined = {a for a, b in values.items() if b == "*"}
