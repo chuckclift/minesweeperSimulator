@@ -196,12 +196,12 @@ def boundary_clicked(clicked, unclicked):
     """
     return {a:clicked[a] for a in clicked if count_adjacent_group(a, unclicked) > 0}
 
-def restricted_theory(coord, val, all_points):
+def restricted_theory(coord, val, unclicked):
     adjustments = {(-1, -1), (0, -1), (1, -1),
                    (-1, 0),           (1, 0),
                    (-1, 1), (0, 1), (1, 1)}
 
-    points = {(coord[0] + a[0], coord[1] + a[1]) for a in adjustments}.intersection(all_points)
+    points = {(coord[0] + a[0], coord[1] + a[1]) for a in adjustments}.intersection(unclicked)
     combos = [a for a in all_combos if sum(a) == val and len(a) == len(points)]
     
     for p in combos:
@@ -214,10 +214,9 @@ def empty_and_flagged(theory, flagged):
     return any([theory[t] == 0 and t in flagged for t in theory])
 
 def manage_theories(clicked, unclicked, flagged):
-    all_tiles = set(clicked).union(unclicked).union(flagged)
     boundary = boundary_clicked(clicked, unclicked)
 
-    nested_theories = [restricted_theory(b, boundary[b], all_tiles) 
+    nested_theories = [restricted_theory(b, boundary[b], unclicked) 
                                                     for b in boundary]
     theories = chain.from_iterable(nested_theories)
 
