@@ -9,6 +9,7 @@ from collections import namedtuple
 
 from solvers import *
 from game import *
+from utils import *
 
 
 class my_test (unittest.TestCase):
@@ -32,6 +33,14 @@ class my_test (unittest.TestCase):
         self.assertEqual(len(t.adj_unclicked), t.adj_mine_count - len(t.adj_flagged))
 
         t = Tile((1,1), 1, {}, {(0,1), (1,0), (2,0), (0,2), (2,1), (1,2), (2,2)}, {(0,0)})
+
+    def test_boundary_clicked(self):
+        clicked = {(0,0):1, (0,1):1, (0,2):1} 
+        unclicked = {(1,0), (1,1), (1,2)}
+        flagged = set()
+        boundary = boundary_clicked(clicked, unclicked)
+        self.assertEqual(boundary, clicked)
+        
 
         
 if __name__ == "__main__": 
